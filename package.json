@@ -1,0 +1,92 @@
+{
+  "name": "demo-copilot-chat-extension",
+  "displayName": "Demo Copilot Chat Extension",
+  "description": "A demo extension for VS Code Copilot Chat with @demo and @helper participants",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/demo/vscode-copilot-chat-extension.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=20.0.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "demo-copilot-chat.hello",
+        "title": "Hello World"
+      },
+      {
+        "command": "demo-copilot-chat.execute-intake",
+        "title": "Execute Intake",
+        "category": "Demo Copilot Chat"
+      },
+      {
+        "command": "demo-copilot-chat.execute-submit",
+        "title": "Execute Submit",
+        "category": "Demo Copilot Chat"
+      },
+      {
+        "command": "demo-copilot-chat.execute-workflow",
+        "title": "Execute Workflow",
+        "category": "Demo Copilot Chat"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "demo-copilot-chat.demo",
+        "name": "demo",
+        "fullName": "Demo Copilot Chat",
+        "description": "Main demo extension with form workflow and intake functionality",
+        "isSticky": false,
+        "commands": [
+          {
+            "name": "workflow",
+            "description": "Check form workflow status"
+          },
+          {
+            "name": "intake",
+            "description": "Start form data collection process"
+          },
+          {
+            "name": "submit",
+            "description": "Submit collected form data"
+          }
+        ]
+      },
+      {
+        "id": "demo-copilot-chat.helper",
+        "name": "helper",
+        "fullName": "Form Helper",
+        "description": "Deprecated - use @demo for all form operations",
+        "isSticky": false
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "start": "NODE_NO_WARNINGS=1 node --no-deprecation ./out/extension.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^3.6.0"
+  }
+}
