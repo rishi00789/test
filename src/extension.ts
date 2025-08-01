@@ -19,7 +19,7 @@ const handleMainChat: vscode.ChatRequestHandler = async (request, context, strea
 	if (request.command && commands[request.command as keyof typeof commands]) {
 		await commands[request.command as keyof typeof commands]();
 	} else {
-		stream.markdown('## 👋 **Demo Copilot Chat Extension**\n\nTry the form intake workflow:');
+		stream.markdown('## 👋 **Demo Copilot Chat Extension**');
 		await showActions(stream, ['Get Started']);
 	}
 	
@@ -27,7 +27,8 @@ const handleMainChat: vscode.ChatRequestHandler = async (request, context, strea
 };
 
 async function handleIntake(stream: vscode.ChatResponseStream) {
-	stream.progress('Collecting form data...');
+	stream.markdown('\n\n**👤 Customer Information**');
+	stream.progress('Collecting customer data...');
 	
 	const fields = [
 		{ prompt: 'Enter your full name', key: 'name' },
@@ -45,32 +46,63 @@ async function handleIntake(stream: vscode.ChatResponseStream) {
 		formData[field.key] = value;
 	}
 	
-	stream.progress('Form data collected successfully!');
-	stream.markdown('## ✅ **Intake Complete**\n\nYour form data has been collected successfully.');
+	stream.progress('Customer data collected successfully!');
+	stream.markdown('\n*Customer Information Complete*\n\nYour customer information has been collected successfully.');
+	await showActions(stream, ['Proceed to Product Details', 'Back to Main']);
+}
+
+async function handleProductDetails(stream: vscode.ChatResponseStream) {
+	stream.markdown('\n\n**📦 Product Information**');
+	stream.progress('Collecting product data...');
+	
+	const fields = [
+		{ prompt: 'Enter Product ID', key: 'productId' },
+		{ prompt: 'Enter Product Origin', key: 'productOrigin' },
+		{ prompt: 'Enter Product Name', key: 'productName' }
+	];
+	
+	for (const field of fields) {
+		stream.progress(`Collecting ${field.key}...`);
+		const value = await vscode.window.showInputBox({ prompt: field.prompt });
+		if (!value) {
+			stream.progress('Product details collection cancelled.');
+			return;
+		}
+		formData[field.key] = value;
+	}
+	
+	stream.progress('Product data collected successfully!');
+	stream.markdown('\n*Product Information Complete*\n\nYour product information has been collected successfully.');
 	await showActions(stream, ['Submit Form', 'Back to Main']);
 }
 
 async function handleSubmit(stream: vscode.ChatResponseStream) {
-	if (!formData.name || !formData.address || !formData.phone) {
-		stream.markdown('## ❌ **No Data to Submit**\n\nPlease complete the intake process first.');
+	const hasCustomerData = formData.name && formData.address && formData.phone;
+	const hasProductData = formData.productId && formData.productOrigin && formData.productName;
+	
+	if (!hasCustomerData || !hasProductData) {
+		stream.markdown('**❌ Incomplete Data**\n\nPlease complete both customer and product information forms before submitting.');
 		await showActions(stream, ['Start Intake']);
 		return;
 	}
 	
-	const submit = await vscode.window.showInformationMessage(
-		`Confirm Submission:\n- Name: ${formData.name}\n- Address: ${formData.address}\n- Phone: ${formData.phone}\n\nSubmit this data?`,
-		'Submit',
-		'Cancel'
-	);
+	const submit = await vscode.window.showInformationMessage('Confirm Submission', 'Submit', 'Cancel');
 	
 	if (submit === 'Submit') {
 		stream.progress('Submitting form...');
 		
 		try {
 			const payload = {
-				name: formData.name,
-				address: formData.address,
-				phone: formData.phone,
+				customerDetails: {
+					name: formData.name,
+					address: formData.address,
+					phone: formData.phone
+				},
+				productDetails: {
+					productId: formData.productId,
+					productOrigin: formData.productOrigin,
+					productName: formData.productName
+				},
 				timestamp: new Date().toISOString(),
 				source: 'vscode-copilot-chat-extension'
 			};
@@ -80,30 +112,36 @@ async function handleSubmit(stream: vscode.ChatResponseStream) {
 			
 			if (response.success) {
 				vscode.window.showInformationMessage(`Form submitted successfully!`);
-				stream.markdown('## ✅ **Form Submitted Successfully!**\n\nYour information has been submitted to the API.');
+				stream.markdown('**✅ Form Submitted Successfully!**\n\nYour information has been submitted to the API.');
 			} else {
 				throw new Error(response.message || 'API call failed');
 			}
 		} catch (error) {
 			stream.progress('API call failed.');
 			vscode.window.showErrorMessage(`API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-			stream.markdown('## ❌ **API Error**\n\nFailed to submit form data to API.');
+			stream.markdown('**❌ API Error**\n\nFailed to submit form data to API.');
 		}
 		
 		await showActions(stream, ['Start New Intake', 'Back to Main']);
 		formData = {};
 	} else {
-		stream.markdown('## ❌ **Submission Cancelled**\n\nForm submission was cancelled.');
+		stream.markdown('**❌ Submission Cancelled**\n\nForm submission was cancelled.');
 		await showActions(stream, ['Try Submit Again', 'Back to Main']);
 	}
 }
 
 async function showWorkflow(stream: vscode.ChatResponseStream) {
-	if (formData.name && formData.address && formData.phone) {
-		stream.markdown('## ✅ **Form Data Ready**\n\nYour form data has been collected and is ready for submission.');
+	const hasCustomerData = formData.name && formData.address && formData.phone;
+	const hasProductData = formData.productId && formData.productOrigin && formData.productName;
+	
+	if (hasCustomerData && hasProductData) {
+		stream.markdown('**✅ Form Data Ready**\n\nBoth customer and product information have been collected and are ready for submission.');
 		await showActions(stream, ['Submit Form', 'Start New Intake']);
+	} else if (hasCustomerData) {
+		stream.markdown('**✅ Customer Data Ready**\n\nYour customer information has been collected. Please complete the product information form to proceed.');
+		await showActions(stream, ['Proceed to Product Details', 'Start New Intake']);
 	} else {
-		stream.markdown('## 📋 **Form Intake Workflow**\n\nReady to collect your information?');
+		stream.markdown('**📋 Template Generation Workflow**');
 		await showActions(stream, ['Get Started']);
 	}
 }
@@ -111,6 +149,7 @@ async function showWorkflow(stream: vscode.ChatResponseStream) {
 async function showActions(stream: vscode.ChatResponseStream, actions: string[]) {
 	const actionMap = {
 		'Get Started': () => handleIntake(stream),
+		'Proceed to Product Details': () => handleProductDetails(stream),
 		'Submit Form': () => handleSubmit(stream),
 		'Start New Intake': () => handleIntake(stream),
 		'Back to Main': () => showWorkflow(stream),
@@ -120,7 +159,8 @@ async function showActions(stream: vscode.ChatResponseStream, actions: string[])
 	
 	const options = actions.map(action => ({
 		label: action,
-		description: action === 'Get Started' || action === 'Start Intake' ? 'Start form data collection' :
+		description: action === 'Get Started' || action === 'Start Intake' ? 'Start customer data collection' :
+					action === 'Proceed to Product Details' ? 'Add product information' :
 					action === 'Submit Form' ? 'Submit the collected data' :
 					action === 'Start New Intake' ? 'Start a new form collection' :
 					action === 'Back to Main' ? 'Return to workflow status' :
@@ -129,11 +169,10 @@ async function showActions(stream: vscode.ChatResponseStream, actions: string[])
 	
 	options.push({ label: 'Exit', description: 'Exit the workflow' });
 	
-	stream.markdown('\n**Choose an action:**');
 	const selected = await vscode.window.showQuickPick(options, { placeHolder: 'Select an action...' });
 	
 	if (selected?.label === 'Exit') {
-		stream.markdown('## 👋 **Goodbye!**\n\nThank you for using the form workflow.');
+		stream.markdown('**👋 Goodbye!**\n\nThank you for using the form workflow.');
 	} else if (selected?.label && actionMap[selected.label as keyof typeof actionMap]) {
 		await actionMap[selected.label as keyof typeof actionMap]();
 	}
