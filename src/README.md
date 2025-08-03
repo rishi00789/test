@@ -1,121 +1,101 @@
-# Greeting Tool
+# MCP Template Server
 
-A VS Code extension that provides a personalized greeting language model tool for VS Code Copilot. This extension enhances your VS Code experience by offering time-aware, personalized greetings with optional emojis.
+A Model Context Protocol (MCP) server built with FastMCP that provides template processing tools via HTTP streaming.
 
 ## Features
 
-### 👋 Personal Greeting Tool
-
-Send personalized greetings with customizable names, time-aware messages, and optional emoji support.
-
-**Capabilities:**
-- Personalized greetings with customizable names (defaults to "Rishi")
-- Time-aware greetings (Good morning/afternoon/evening)
-- Optional emoji support with random selection
-- Welcome message with helpful context about available tools
-
-**Example Usage:**
-```
-#greet
-#greet name: "Rishi" timeOfDay: true includeEmoji: true
-#greet name: "Developer" includeEmoji: false
-```
+- **FastMCP Integration**: Built using the FastMCP framework
+- **Streamable HTTP**: Endpoint available at `http://localhost:5000/mcp`
+- **Template Tools**: Two main tools for template processing
+- **Pydantic Models**: Type-safe input validation
 
 ## Installation
 
-1. Clone this repository
-2. Install dependencies: `npm install`
-3. Compile the extension: `npm run compile`
-4. Press F5 in VS Code to run the extension in a new Extension Development Host window
-
-## Usage with VS Code Copilot
-
-### Agent Mode Integration
-
-The greeting tool is automatically available in VS Code Copilot agent mode. The agent can invoke it when you say "hello", "hi", or similar greetings to provide a personalized welcome message.
-
-### Manual Tool Reference
-
-You can also manually reference the greeting tool in your chat prompts using the `#` syntax:
-
-```
-Say hello to me
-#greet
-
-Greet me with my name
-#greet name: "Rishi"
-
-Give me a simple greeting without emoji
-#greet includeEmoji: false
+1. Install dependencies:
+```bash
+pip install -r requirements.txt
 ```
 
-## Tool Configuration
+## Running the Server
 
-### Greeting Tool Parameters
+Start the MCP server:
+```bash
+python mcp_server.py
+```
 
-- `name` (string, optional): The name to greet. Defaults to "Rishi" if not specified
-- `timeOfDay` (boolean, default: true): Whether to include time-of-day specific greetings (Good morning/afternoon/evening)
-- `includeEmoji` (boolean, default: true): Whether to include emojis in the greeting
+The server will start on `http://localhost:5000/mcp`
+
+## Available Tools
+
+### 1. process_template
+Processes template requests with AIT, SPK, and repository parameters.
+
+**Input Parameters:**
+- `ait` (required): AIT parameter
+- `spk` (required): SPK parameter  
+- `repo` (required): Repository name
+- `application_name` (optional): Application name
+- `project_name` (optional): Project name
+- `cluster_url` (optional): Cluster URL
+- `service_id` (optional): Service ID
+- `service_password` (optional): Service password
+
+**Features:**
+- Automatically cleans parameter prefixes (e.g., `ait-123` → `123`)
+- Returns formatted response with all parameters
+- Handles optional parameters gracefully
+
+### 2. dynamic_template_processor
+Simulates dynamic template processing with parameter collection.
+
+**Input Parameters:**
+- `use_defaults` (optional): Use default values for demonstration
+
+**Features:**
+- Simulates input dialog collection
+- Can use default or collected parameters
+- Returns formatted response
+
+## API Usage
+
+### HTTP Endpoint
+The MCP server is available at: `http://localhost:5000/mcp`
+
+### Example Requests
+
+#### Process Template
+```bash
+curl -X POST http://localhost:5000/mcp/tools/process_template \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ait": "ait-123",
+    "spk": "spk-asd", 
+    "repo": "reponame-polo",
+    "application_name": "applicationName-myapp",
+    "project_name": "projectName-myproject",
+    "cluster_url": "clusterURL-https://cluster.com",
+    "service_id": "serviceID-user123",
+    "service_password": "servicePassword-pass123"
+  }'
+```
+
+#### Dynamic Template Processor
+```bash
+curl -X POST http://localhost:5000/mcp/tools/dynamic_template_processor \
+  -H "Content-Type: application/json" \
+  -d '{
+    "use_defaults": true
+  }'
+```
+
+## Integration with VS Code Extension
+
+This MCP server can be integrated with your VS Code extension to provide additional template processing capabilities via HTTP streaming.
 
 ## Development
 
-### Project Structure
-
-```
-src/
-├── extension.ts          # Main extension file with greeting tool implementation
-package.json              # Extension manifest with tool definition
-README.md                 # This documentation
-```
-
-### Building and Testing
-
-```bash
-# Install dependencies
-npm install
-
-# Compile TypeScript
-npm run compile
-
-# Watch for changes
-npm run watch
-
-# Run tests
-npm test
-
-# Package extension
-npm run package
-```
-
-## How It Works
-
-The greeting tool:
-
-1. **Time Detection**: Automatically detects the current time of day
-2. **Personalization**: Uses the provided name or defaults to "Rishi"
-3. **Emoji Selection**: Randomly selects from a curated set of friendly emojis
-4. **Welcome Context**: Provides helpful information about available tools
-
-## Example Output
-
-When you say "hello" in VS Code Copilot, the tool might respond with:
-
-```
-## Good morning, Rishi! 👋
-
-**Welcome to your VS Code workspace!** 
-
-I'm here to help you with your coding tasks. Feel free to ask me anything about your code, files, or development workflow.
-
-How can I assist you today?
-```
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## References
-
-- [VS Code Language Model Tools API Documentation](https://code.visualstudio.com/api/extension-guides/ai/tools)
-- [VS Code Extension API](https://code.visualstudio.com/api)
-- [VS Code Copilot Agent Mode](https://code.visualstudio.com/docs/copilot/chat/chat-agent-mode) 
+The server uses:
+- **FastMCP**: For MCP protocol implementation
+- **Pydantic**: For data validation and serialization
+- **Uvicorn**: ASGI server for HTTP streaming
+- **Python 3.8+**: Required for async/await support 

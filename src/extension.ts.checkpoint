@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import axios from 'axios';
 
 // Interface for template tool parameters
 export interface ITemplateToolParameters {
@@ -304,53 +303,8 @@ class DynamicTemplateTool implements vscode.LanguageModelTool<IDynamicTemplateTo
             ]);
         }
 
-        try {
-            // Call the MCP server with the collected parameters
-            const mcpPayload = {
-                "method": "tools/call",
-                "params": {
-                    "name": "process_template",
-                    "arguments": {
-                        "input": {
-                            "ait": aitInput,
-                            "spk": spkInput,
-                            "repo": repoInput,
-                            "application_name": applicationNameInput,
-                            "project_name": projectNameInput,
-                            "cluster_url": clusterURLInput,
-                            "service_id": serviceIDInput,
-                            "service_password": servicePasswordInput
-                        }
-                    },
-                    "_meta": {
-                        "progressToken": 1
-                    }
-                },
-                "jsonrpc": "2.0",
-                "id": 1
-            };
-
-            const mcpHeaders = {
-                'Content-Type': 'application/json, text/event-stream',
-                'Accept': 'application/json, text/event-stream',
-                'mcp-session-id': '947e4b4b8d7ea058596a9992e809eb7f346a0a8ed3ca9d04fec2fd28a76dc77d'
-            };
-
-            console.log('Calling MCP server with payload:', JSON.stringify(mcpPayload, null, 2));
-
-            const response = await axios.post(
-                'http://0.0.0.0:5001/mcp',
-                mcpPayload,
-                {
-                    headers: mcpHeaders,
-                    timeout: 10000
-                }
-            );
-
-            console.log('MCP server response:', response.data);
-
-            // Create the result with both collected parameters and MCP response
-            const result = `
+        // Response with the collected parameters
+        const result = `
 ## Dynamic Template Processing Complete
 
 **Parameters Collected:**
@@ -363,43 +317,23 @@ class DynamicTemplateTool implements vscode.LanguageModelTool<IDynamicTemplateTo
 - **Service ID**: ${serviceIDInput}
 - **Service Password**: ***
 
-**MCP Server Response:**
-${JSON.stringify(response.data, null, 2)}
+**Response:**
+Here are the parameters you provided:
+- AIT: ${aitInput}
+- SPK: ${spkInput}
+- Repository: ${repoInput}
+- Application Name: ${applicationNameInput}
+- Project Name: ${projectNameInput}
+- Cluster URL: ${clusterURLInput}
+- Service ID: ${serviceIDInput}
+- Service Password: ***
 
-**Summary:**
-The dynamic template tool has successfully collected your parameters and called the MCP server.
-            `;
+The dynamic template tool has successfully processed your request.
+        `;
 
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart(result)
-            ]);
-
-        } catch (error) {
-            console.error('Error calling MCP server:', error);
-            
-            const errorResult = `
-## Dynamic Template Processing - MCP Server Error
-
-**Parameters Collected:**
-- **AIT**: ${aitInput}
-- **SPK**: ${spkInput}
-- **Repository**: ${repoInput}
-- **Application Name**: ${applicationNameInput}
-- **Project Name**: ${projectNameInput}
-- **Cluster URL**: ${clusterURLInput}
-- **Service ID**: ${serviceIDInput}
-- **Service Password**: ***
-
-**Error Details:**
-${error instanceof Error ? error.message : 'Unknown error occurred'}
-
-**Note:** Parameters were collected successfully, but the MCP server call failed.
-            `;
-
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart(errorResult)
-            ]);
-        }
+        return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(result)
+        ]);
     }
 }
 

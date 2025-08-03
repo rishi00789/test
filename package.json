@@ -16,42 +16,89 @@
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
-    "contributes": {
+  "contributes": {
     "languageModelTools": [
-        {
-          "name": "workspace-analyzer_greeting",
-          "tags": [
-            "greeting",
-            "personal",
-            "welcome"
-          ],
-          "toolReferenceName": "greet",
-          "displayName": "Personal Greeting",
-          "modelDescription": "Send a personalized greeting to the user. This tool creates time-aware greetings with optional emojis and personalized messages. Use this when the user says 'hello', 'hi', or similar greetings, or when you want to welcome them to the workspace. The tool automatically detects the time of day and creates appropriate greetings.",
-          "userDescription": "Send a personalized greeting with time awareness",
-          "canBeReferencedInPrompt": true,
-          "icon": "$(heart)",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string",
-                "description": "The name to greet. Defaults to 'Rishi' if not specified.",
-                "default": "Rishi"
-              },
-              "timeOfDay": {
-                "type": "boolean",
-                "description": "Whether to include time-of-day specific greetings (Good morning/afternoon/evening).",
-                "default": true
-              },
-              "includeEmoji": {
-                "type": "boolean",
-                "description": "Whether to include emojis in the greeting.",
-                "default": true
-              }
+      {
+        "name": "workspace-analyzer_template",
+        "tags": [
+          "template",
+          "processing",
+          "repository"
+        ],
+        "toolReferenceName": "template",
+        "displayName": "Template Tool",
+        "modelDescription": "Process template requests with AIT, SPK, and repository parameters. This tool simply returns the provided parameters as a response for template processing workflows.",
+        "userDescription": "Process template with AIT, SPK, and repository parameters",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(tools)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "ait": {
+              "type": "string",
+              "description": "The AIT parameter for template processing"
+            },
+            "spk": {
+              "type": "string",
+              "description": "The SPK parameter for template processing"
+            },
+            "repo": {
+              "type": "string",
+              "description": "The repository name for template processing"
+            },
+            "applicationName": {
+              "type": "string",
+              "description": "The name of the application"
+            },
+            "projectName": {
+              "type": "string",
+              "description": "The name of the project"
+            },
+            "clusterURL": {
+              "type": "string",
+              "description": "The URL of the cluster"
+            },
+            "serviceID": {
+              "type": "string",
+              "description": "The service ID for authentication"
+            },
+            "servicePassword": {
+              "type": "string",
+              "description": "The service password for authentication"
             }
-          }
+          },
+          "required": [
+            "ait",
+            "spk",
+            "repo",
+            "applicationName",
+            "projectName",
+            "clusterURL",
+            "serviceID",
+            "servicePassword"
+          ]
         }
+      },
+      {
+        "name": "workspace-analyzer_dynamic-template",
+        "tags": [
+          "dynamic",
+          "template",
+          "processing",
+          "repository"
+        ],
+        "toolReferenceName": "dynamic-template",
+        "displayName": "Dynamic Template Tool",
+        "modelDescription": "Call this tool to process dynamic templates. Simply use #dynamic-template and the tool will prompt you for all required parameters through input dialogs. No parameters need to be provided in the command.",
+        "userDescription": "Call #dynamic-template to start dynamic template processing with input dialogs",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(sync)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
     ]
   },
   "scripts": {
@@ -64,14 +111,17 @@
     "package": "vsce package",
     "start": "NODE_NO_WARNINGS=1 node --no-deprecation ./out/extension.js"
   },
+  "dependencies": {
+    "axios": "^1.11.0"
+  },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "18.x",
+    "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.0.0",
-    "typescript": "^5.0.0",
     "@vscode/test-electron": "^2.3.8",
-    "@vscode/vsce": "^3.6.0"
+    "@vscode/vsce": "^3.6.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
   }
 }
