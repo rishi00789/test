@@ -1,11 +1,11 @@
 {
-  "name": "demo-copilot-chat-extension",
-  "displayName": "Demo Copilot Chat Extension",
-  "description": "A demo extension for VS Code Copilot Chat with @demo and @helper participants",
+  "name": "greeting-tool",
+  "displayName": "Greeting Tool",
+  "description": "A VS Code extension that provides a personalized greeting language model tool for VS Code Copilot.",
   "version": "0.0.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/demo/vscode-copilot-chat-extension.git"
+    "url": "https://github.com/workspace-analyzer/vscode-workspace-analyzer.git"
   },
   "engines": {
     "vscode": "^1.85.0",
@@ -16,57 +16,42 @@
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "demo-copilot-chat.hello",
-        "title": "Hello World"
-      },
-      {
-        "command": "demo-copilot-chat.execute-intake",
-        "title": "Execute Intake",
-        "category": "Demo Copilot Chat"
-      },
-      {
-        "command": "demo-copilot-chat.execute-submit",
-        "title": "Execute Submit",
-        "category": "Demo Copilot Chat"
-      },
-      {
-        "command": "demo-copilot-chat.execute-workflow",
-        "title": "Execute Workflow",
-        "category": "Demo Copilot Chat"
-      }
-    ],
-    "chatParticipants": [
-      {
-        "id": "demo-copilot-chat.demo",
-        "name": "demo",
-        "fullName": "Demo Copilot Chat",
-        "description": "Main demo extension with form workflow and intake functionality",
-        "isSticky": false,
-        "commands": [
-          {
-            "name": "workflow",
-            "description": "Check form workflow status"
-          },
-          {
-            "name": "intake",
-            "description": "Start form data collection process"
-          },
-          {
-            "name": "submit",
-            "description": "Submit collected form data"
+    "contributes": {
+    "languageModelTools": [
+        {
+          "name": "workspace-analyzer_greeting",
+          "tags": [
+            "greeting",
+            "personal",
+            "welcome"
+          ],
+          "toolReferenceName": "greet",
+          "displayName": "Personal Greeting",
+          "modelDescription": "Send a personalized greeting to the user. This tool creates time-aware greetings with optional emojis and personalized messages. Use this when the user says 'hello', 'hi', or similar greetings, or when you want to welcome them to the workspace. The tool automatically detects the time of day and creates appropriate greetings.",
+          "userDescription": "Send a personalized greeting with time awareness",
+          "canBeReferencedInPrompt": true,
+          "icon": "$(heart)",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name to greet. Defaults to 'Rishi' if not specified.",
+                "default": "Rishi"
+              },
+              "timeOfDay": {
+                "type": "boolean",
+                "description": "Whether to include time-of-day specific greetings (Good morning/afternoon/evening).",
+                "default": true
+              },
+              "includeEmoji": {
+                "type": "boolean",
+                "description": "Whether to include emojis in the greeting.",
+                "default": true
+              }
+            }
           }
-        ]
-      },
-      {
-        "id": "demo-copilot-chat.helper",
-        "name": "helper",
-        "fullName": "Form Helper",
-        "description": "Deprecated - use @demo for all form operations",
-        "isSticky": false
-      }
+        }
     ]
   },
   "scripts": {
