@@ -1,7 +1,7 @@
 {
   "name": "greeting-tool",
   "displayName": "Greeting Tool",
-  "description": "A VS Code extension that provides a personalized greeting language model tool for VS Code Copilot.",
+  "description": "A VS Code extension that provides template processing chat participants for VS Code Copilot.",
   "version": "0.0.1",
   "repository": {
     "type": "git",
@@ -17,87 +17,19 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
-    "languageModelTools": [
+    "chatParticipants": [
       {
-        "name": "workspace-analyzer_template",
-        "tags": [
-          "template",
-          "processing",
-          "repository"
-        ],
-        "toolReferenceName": "template",
-        "displayName": "Template Tool",
-        "modelDescription": "Process template requests with AIT, SPK, and repository parameters. This tool simply returns the provided parameters as a response for template processing workflows.",
-        "userDescription": "Process template with AIT, SPK, and repository parameters",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(tools)",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "ait": {
-              "type": "string",
-              "description": "The AIT parameter for template processing"
-            },
-            "spk": {
-              "type": "string",
-              "description": "The SPK parameter for template processing"
-            },
-            "repo": {
-              "type": "string",
-              "description": "The repository name for template processing"
-            },
-            "applicationName": {
-              "type": "string",
-              "description": "The name of the application"
-            },
-            "projectName": {
-              "type": "string",
-              "description": "The name of the project"
-            },
-            "clusterURL": {
-              "type": "string",
-              "description": "The URL of the cluster"
-            },
-            "serviceID": {
-              "type": "string",
-              "description": "The service ID for authentication"
-            },
-            "servicePassword": {
-              "type": "string",
-              "description": "The service password for authentication"
-            }
-          },
-          "required": [
-            "ait",
-            "spk",
-            "repo",
-            "applicationName",
-            "projectName",
-            "clusterURL",
-            "serviceID",
-            "servicePassword"
-          ]
-        }
-      },
-      {
-        "name": "workspace-analyzer_dynamic-template",
-        "tags": [
-          "dynamic",
-          "template",
-          "processing",
-          "repository"
-        ],
-        "toolReferenceName": "dynamic-template",
-        "displayName": "Dynamic Template Tool",
-        "modelDescription": "Call this tool to process dynamic templates. Simply use #dynamic-template and the tool will prompt you for all required parameters through input dialogs. No parameters need to be provided in the command.",
-        "userDescription": "Call #dynamic-template to start dynamic template processing with input dialogs",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(sync)",
-        "inputSchema": {
-          "type": "object",
-          "properties": {},
-          "required": []
-        }
+        "id": "workspace-analyzer.template",
+        "name": "template",
+        "fullName": "Template Processor",
+        "description": "Debug chat context and display context information",
+        "isSticky": false,
+        "commands": [
+          {
+            "name": "process",
+            "description": "Debug and display the complete chat context"
+          }
+        ]
       }
     ]
   },
