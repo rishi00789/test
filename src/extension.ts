@@ -208,19 +208,56 @@ const templateHandler: vscode.ChatRequestHandler = async (
     console.log('Full Request:', JSON.stringify(request, null, 2));
     console.log('Full Context:', JSON.stringify(context, null, 2));
 
-    // Extract file contents and parameters from references
+    // Extract file contents and parameters from multiple sources
     let fileContents = '';
     let extractedParams: Partial<ITemplateParameters> = {};
+    let contextFound = false;
     
-    if (context.history && context.history.length > 0) {
+    // Method 1: Check current request for references
+    if (request.references && request.references.length > 0) {
+        console.log('Found references in current request');
+        contextFound = true;
+        for (const reference of request.references) {
+            const refValue = reference.value as any;
+            if (refValue && refValue.uri && refValue.uri.fsPath) {
+                try {
+                    const filePath = refValue.uri.fsPath;
+                    console.log('Found file reference in current request:', filePath);
+                    
+                    // Read the file contents
+                    const document = await vscode.workspace.openTextDocument(filePath);
+                    const content = document.getText();
+                    
+                    fileContents += `### File: ${filePath}\n`;
+                    fileContents += `**Content:**\n\`\`\`\n${content}\n\`\`\`\n\n`;
+                    
+                    console.log('File contents:', content);
+                    
+                    // Extract parameters from file content
+                    const fileParams = extractParametersFromText(content);
+                    extractedParams = { ...extractedParams, ...fileParams };
+                    
+                } catch (error) {
+                    console.error('Error reading file:', error);
+                    fileContents += `### File: ${refValue.uri.fsPath}\n`;
+                    fileContents += `**Error reading file:** ${error}\n\n`;
+                }
+            }
+        }
+    }
+    
+    // Method 2: Check context history for references
+    if (!contextFound && context.history && context.history.length > 0) {
+        console.log('Checking context history for references');
         for (const message of context.history) {
             if ('prompt' in message && message.references && message.references.length > 0) {
+                contextFound = true;
                 for (const reference of message.references) {
                     const refValue = reference.value as any;
                     if (refValue && refValue.uri && refValue.uri.fsPath) {
                         try {
                             const filePath = refValue.uri.fsPath;
-                            console.log('Found file reference:', filePath);
+                            console.log('Found file reference in history:', filePath);
                             
                             // Read the file contents
                             const document = await vscode.workspace.openTextDocument(filePath);
@@ -245,6 +282,73 @@ const templateHandler: vscode.ChatRequestHandler = async (
             }
         }
     }
+    
+    // Method 3: Check for active editor content
+    if (!contextFound) {
+        console.log('Checking active editor for context');
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor) {
+            const document = activeEditor.document;
+            const content = document.getText();
+            
+            // Only process if it looks like a markdown or config file
+            if (document.fileName.endsWith('.md') || 
+                document.fileName.endsWith('.txt') || 
+                document.fileName.endsWith('.json') ||
+                document.fileName.endsWith('.yaml') ||
+                document.fileName.endsWith('.yml')) {
+                
+                contextFound = true;
+                fileContents += `### Active Editor: ${document.fileName}\n`;
+                fileContents += `**Content:**\n\`\`\`\n${content}\n\`\`\`\n\n`;
+                
+                console.log('Active editor contents:', content);
+                
+                // Extract parameters from file content
+                const fileParams = extractParametersFromText(content);
+                extractedParams = { ...extractedParams, ...fileParams };
+            }
+        }
+    }
+    
+    // Method 4: Check workspace for common config files
+    if (!contextFound) {
+        console.log('Checking workspace for common config files');
+        try {
+            const workspaceFiles = await vscode.workspace.findFiles(
+                '**/*.{md,txt,json,yaml,yml}',
+                '**/node_modules/**'
+            );
+            
+            // Look for files that might contain our parameters
+            for (const file of workspaceFiles.slice(0, 5)) { // Limit to first 5 files
+                try {
+                    const document = await vscode.workspace.openTextDocument(file);
+                    const content = document.getText();
+                    
+                    // Check if content contains any of our parameter keywords
+                    const hasParams = /(ait|spk|reponame|applicationname|projectname|clusterurl|serviceid|servicename)/i.test(content);
+                    
+                    if (hasParams) {
+                        contextFound = true;
+                        fileContents += `### Workspace File: ${file.fsPath}\n`;
+                        fileContents += `**Content:**\n\`\`\`\n${content}\n\`\`\`\n\n`;
+                        
+                        console.log('Workspace file contents:', content);
+                        
+                        // Extract parameters from file content
+                        const fileParams = extractParametersFromText(content);
+                        extractedParams = { ...extractedParams, ...fileParams };
+                        break; // Use the first file that contains parameters
+                    }
+                } catch (error) {
+                    console.error('Error reading workspace file:', error);
+                }
+            }
+        } catch (error) {
+            console.error('Error searching workspace files:', error);
+        }
+    }
 
     // Clean the extracted parameters
     const cleanedParams: Partial<ITemplateParameters> = {};
@@ -254,13 +358,26 @@ const templateHandler: vscode.ChatRequestHandler = async (
         }
     }
 
-    // Display extracted parameters
+    // Display context information
     stream.markdown('## Template Parameter Extraction\n\n');
+    
+    if (contextFound) {
+        stream.markdown('✅ **Context found and processed successfully!**\n\n');
+    } else {
+        stream.markdown('⚠️ **No context found in this request.**\n\n');
+        stream.markdown('**Tips for better context detection:**\n');
+        stream.markdown('- Make sure your markdown file is open in the editor\n');
+        stream.markdown('- Try attaching the file to your chat message\n');
+        stream.markdown('- Or run the command again after the file is loaded\n\n');
+    }
 
     // Add file contents if found
     if (fileContents) {
         stream.markdown('## File Contents Found\n\n');
         stream.markdown(fileContents);
+    } else {
+        stream.markdown('## No File Contents Found\n\n');
+        stream.markdown('No files with parameter information were detected in the current context.\n\n');
     }
 
     // Display extracted parameters
