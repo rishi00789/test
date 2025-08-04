@@ -1,101 +1,64 @@
-# MCP Template Server
+# Chat Context Debug Extension
 
-A Model Context Protocol (MCP) server built with FastMCP that provides template processing tools via HTTP streaming.
+This VS Code extension provides a chat participant for debugging and displaying chat context information provided by Copilot.
+
+## Chat Participant
+
+### @template
+The Template Processor chat participant helps you debug and understand the chat context that Copilot provides.
+
+**Usage:**
+```
+@template /process
+```
+
+**What it does:**
+- Displays complete chat context information
+- Shows request details and parameters
+- Lists all available context properties
+- Displays conversation history
+- Shows workspace and file context information
+- Helps understand what context Copilot provides
 
 ## Features
 
-- **FastMCP Integration**: Built using the FastMCP framework
-- **Streamable HTTP**: Endpoint available at `http://localhost:5000/mcp`
-- **Template Tools**: Two main tools for template processing
-- **Pydantic Models**: Type-safe input validation
+- **Context Debugging**: Displays all available context information from Copilot
+- **Request Analysis**: Shows request command, prompt, and other details
+- **History Display**: Lists conversation history and messages
+- **Property Inspection**: Shows all available context properties and their values
+- **Workspace Context**: Displays workspace and file context information
 
 ## Installation
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-## Running the Server
-
-Start the MCP server:
-```bash
-python mcp_server.py
-```
-
-The server will start on `http://localhost:5000/mcp`
-
-## Available Tools
-
-### 1. process_template
-Processes template requests with AIT, SPK, and repository parameters.
-
-**Input Parameters:**
-- `ait` (required): AIT parameter
-- `spk` (required): SPK parameter  
-- `repo` (required): Repository name
-- `application_name` (optional): Application name
-- `project_name` (optional): Project name
-- `cluster_url` (optional): Cluster URL
-- `service_id` (optional): Service ID
-- `service_password` (optional): Service password
-
-**Features:**
-- Automatically cleans parameter prefixes (e.g., `ait-123` → `123`)
-- Returns formatted response with all parameters
-- Handles optional parameters gracefully
-
-### 2. dynamic_template_processor
-Simulates dynamic template processing with parameter collection.
-
-**Input Parameters:**
-- `use_defaults` (optional): Use default values for demonstration
-
-**Features:**
-- Simulates input dialog collection
-- Can use default or collected parameters
-- Returns formatted response
-
-## API Usage
-
-### HTTP Endpoint
-The MCP server is available at: `http://localhost:5000/mcp`
-
-### Example Requests
-
-#### Process Template
-```bash
-curl -X POST http://localhost:5000/mcp/tools/process_template \
-  -H "Content-Type: application/json" \
-  -d '{
-    "ait": "ait-123",
-    "spk": "spk-asd", 
-    "repo": "reponame-polo",
-    "application_name": "applicationName-myapp",
-    "project_name": "projectName-myproject",
-    "cluster_url": "clusterURL-https://cluster.com",
-    "service_id": "serviceID-user123",
-    "service_password": "servicePassword-pass123"
-  }'
-```
-
-#### Dynamic Template Processor
-```bash
-curl -X POST http://localhost:5000/mcp/tools/dynamic_template_processor \
-  -H "Content-Type: application/json" \
-  -d '{
-    "use_defaults": true
-  }'
-```
-
-## Integration with VS Code Extension
-
-This MCP server can be integrated with your VS Code extension to provide additional template processing capabilities via HTTP streaming.
+1. Install the extension from the VS Code marketplace
+2. The chat participant will be available in the VS Code Chat view
+3. Use `@template /process` to invoke the participant and see context information
 
 ## Development
 
-The server uses:
-- **FastMCP**: For MCP protocol implementation
-- **Pydantic**: For data validation and serialization
-- **Uvicorn**: ASGI server for HTTP streaming
-- **Python 3.8+**: Required for async/await support 
+To build and run this extension:
+
+```bash
+npm install
+npm run compile
+npm run watch
+```
+
+Press F5 in VS Code to launch the extension in a new Extension Development Host window.
+
+## Usage Examples
+
+**Basic Context Debug:**
+```
+@template /process
+```
+
+This will display all the context information that Copilot provides, including:
+- Request details
+- Context properties
+- Conversation history
+- Workspace information
+- File context
+- And more...
+
+The extension is designed to help you understand what context information is available when building chat participants. 

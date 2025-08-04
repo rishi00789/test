@@ -1,424 +1,534 @@
 import * as vscode from 'vscode';
 import axios from 'axios';
 
-// Interface for template tool parameters
-export interface ITemplateToolParameters {
+// Interface for template parameters
+export interface ITemplateParameters {
     ait: string;
     spk: string;
-    repo: string;
-    applicationName: string;
-    projectName: string;
-    clusterURL: string;
-    serviceID: string;
-    servicePassword: string;
+    reponame: string;
+    applicationname: string;
+    projectname: string;
+    clusterurl: string;
+    serviceid: string;
+    servicename: string;
 }
 
-// Interface for dynamic template tool parameters
-export interface IDynamicTemplateToolParameters {
-    // No parameters needed - tool will prompt for everything
+// Helper function to extract parameters from text content
+function extractParametersFromText(content: string): Partial<ITemplateParameters> {
+    const params: Partial<ITemplateParameters> = {};
+    
+    // Define patterns for each parameter
+    const patterns = {
+        ait: /(?:ait|AIT)[:\s-]+([^\s\n,]+)/gi,
+        spk: /(?:spk|SPK)[:\s-]+([^\s\n,]+)/gi,
+        reponame: /(?:reponame|repo|repository)[:\s-]+([^\s\n,]+)/gi,
+        applicationname: /(?:applicationname|application|app)[:\s-]+([^\s\n,]+)/gi,
+        projectname: /(?:projectname|project)[:\s-]+([^\s\n,]+)/gi,
+        clusterurl: /(?:clusterurl|cluster|clusterURL)[:\s-]+([^\s\n,]+)/gi,
+        serviceid: /(?:serviceid|serviceID|service)[:\s-]+([^\s\n,]+)/gi,
+        servicename: /(?:servicename|servicename|service)[:\s-]+([^\s\n,]+)/gi
+    };
+
+    // Extract parameters using regex patterns
+    for (const [key, pattern] of Object.entries(patterns)) {
+        const matches = content.match(pattern);
+        if (matches && matches.length > 0) {
+            // Take the first match and clean it
+            let value = matches[0].replace(/^(ait|spk|reponame|applicationname|projectname|clusterurl|serviceid|servicename)[:\s-]+/i, '').trim();
+            (params as any)[key] = value;
+        }
+    }
+
+    return params;
 }
 
-// Template Tool
-class TemplateTool implements vscode.LanguageModelTool<ITemplateToolParameters> {
-    async prepareInvocation(
-        options: vscode.LanguageModelToolInvocationPrepareOptions<ITemplateToolParameters>,
-        _token: vscode.CancellationToken
-    ) {
-        const params = options.input;
+// Helper function to clean parameter values
+function cleanParameterValue(value: string): string {
+    if (!value) return value;
+    
+    // Remove common prefixes if they exist
+    const prefixes = {
+        'ait-': 4,
+        'spk-': 4,
+        'reponame-': 9,
+        'applicationname-': 17,
+        'projectname-': 13,
+        'clusterurl-': 11,
+        'serviceid-': 10,
+        'servicename-': 12
+    };
+
+    for (const [prefix, length] of Object.entries(prefixes)) {
+        if (value.toLowerCase().startsWith(prefix)) {
+            return value.substring(length);
+        }
+    }
+    
+    return value;
+}
+
+// Function to call MCP server with parameters and display results
+async function callMCPServerWithParams(
+    stream: vscode.ChatResponseStream, 
+    params: Partial<ITemplateParameters>
+): Promise<vscode.ChatResult> {
+    
+    // Ensure all required parameters are present
+    const requiredParams: ITemplateParameters = {
+        ait: params.ait || '',
+        spk: params.spk || '',
+        reponame: params.reponame || '',
+        applicationname: params.applicationname || '',
+        projectname: params.projectname || '',
+        clusterurl: params.clusterurl || '',
+        serviceid: params.serviceid || '',
+        servicename: params.servicename || ''
+    };
+
+    // Check for missing required parameters
+    const missingParams = Object.entries(requiredParams).filter(([key, value]) => !value);
+    if (missingParams.length > 0) {
+        stream.markdown(`## Missing Required Parameters\n\nThe following parameters are missing:\n${missingParams.map(([key]) => `- **${key}**`).join('\n')}\n\nPlease provide all required parameters.`);
+        return { metadata: { command: 'process', status: 'missing_params' } };
+    }
+
+    try {
+        stream.markdown('## Processing Template...\n\nCalling MCP server with parameters...');
         
-        const confirmationMessages = {
-            title: 'Process Template Request',
-            message: new vscode.MarkdownString(
-                `Process template with the following parameters?\n\n` +
-                `- **AIT**: ${params.ait}\n` +
-                `- **SPK**: ${params.spk}\n` +
-                `- **Repository**: ${params.repo}\n` +
-                `- **Application Name**: ${params.applicationName}\n` +
-                `- **Project Name**: ${params.projectName}\n` +
-                `- **Cluster URL**: ${params.clusterURL}\n` +
-                `- **Service ID**: ${params.serviceID}\n` +
-                `- **Service Password**: ***`
-            ),
-        };
-
-        return {
-            invocationMessage: `Processing template with provided parameters`,
-            confirmationMessages,
-        };
-    }
-
-    async invoke(
-        options: vscode.LanguageModelToolInvocationOptions<ITemplateToolParameters>,
-        _token: vscode.CancellationToken
-    ): Promise<vscode.LanguageModelToolResult> {
-        const params = options.input;
-
-        // Parse parameters if they contain the parameter names
-        let ait = params.ait;
-        let spk = params.spk;
-        let repo = params.repo;
-        let applicationName = params.applicationName;
-        let projectName = params.projectName;
-        let clusterURL = params.clusterURL;
-        let serviceID = params.serviceID;
-        let servicePassword = params.servicePassword;
-
-        // Clean up parameters if they contain the parameter names
-        if (ait && ait.startsWith('ait-')) {
-            ait = ait.substring(4); // Remove 'ait-' prefix
-        }
-        if (spk && spk.startsWith('spk-')) {
-            spk = spk.substring(4); // Remove 'spk-' prefix
-        }
-        if (repo && repo.startsWith('reponame-')) {
-            repo = repo.substring(9); // Remove 'reponame-' prefix
-        }
-        if (applicationName && applicationName.startsWith('applicationName-')) {
-            applicationName = applicationName.substring(17); // Remove 'applicationName-' prefix
-        }
-        if (projectName && projectName.startsWith('projectName-')) {
-            projectName = projectName.substring(13); // Remove 'projectName-' prefix
-        }
-        if (clusterURL && clusterURL.startsWith('clusterURL-')) {
-            clusterURL = clusterURL.substring(11); // Remove 'clusterURL-' prefix
-        }
-        if (serviceID && serviceID.startsWith('serviceID-')) {
-            serviceID = serviceID.substring(10); // Remove 'serviceID-' prefix
-        }
-        if (servicePassword && servicePassword.startsWith('servicePassword-')) {
-            servicePassword = servicePassword.substring(17); // Remove 'servicePassword-' prefix
-        }
-
-        // Debug: Log the raw input for troubleshooting
-        console.log('Raw template tool input:', JSON.stringify(params));
-
-        // Simple response with the cleaned parameters
-        const result = `
-## Template Processing Complete
-
-**Raw Input Received:**
-\`\`\`json
-${JSON.stringify(params, null, 2)}
-\`\`\`
-
-**Cleaned Parameters:**
-- **AIT**: ${ait}
-- **SPK**: ${spk}
-- **Repository**: ${repo}
-- **Application Name**: ${applicationName}
-- **Project Name**: ${projectName}
-- **Cluster URL**: ${clusterURL}
-- **Service ID**: ${serviceID}
-- **Service Password**: ${servicePassword ? '***' : 'Not provided'}
-
-**Response:**
-Here are the parameters you provided:
-- AIT: ${ait}
-- SPK: ${spk}
-- Repository: ${repo}
-- Application Name: ${applicationName}
-- Project Name: ${projectName}
-- Cluster URL: ${clusterURL}
-- Service ID: ${serviceID}
-- Service Password: ${servicePassword ? '***' : 'Not provided'}
-
-The template tool has successfully processed your request.
-        `;
-
-        return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(result)
-        ]);
-    }
-}
-
-// Dynamic Template Tool
-class DynamicTemplateTool implements vscode.LanguageModelTool<IDynamicTemplateToolParameters> {
-    async prepareInvocation(
-        options: vscode.LanguageModelToolInvocationPrepareOptions<IDynamicTemplateToolParameters>,
-        _token: vscode.CancellationToken
-    ) {
-        const confirmationMessages = {
-            title: 'Process Dynamic Template Request',
-            message: new vscode.MarkdownString(
-                `Process dynamic template with input dialogs?\n\n` +
-                `The tool will prompt you for each required parameter:\n` +
-                `- AIT\n` +
-                `- SPK\n` +
-                `- Repository\n` +
-                `- Application Name\n` +
-                `- Project Name\n` +
-                `- Cluster URL\n` +
-                `- Service ID\n` +
-                `- Service Password`
-            ),
-        };
-
-        return {
-            invocationMessage: `Processing dynamic template with input dialogs`,
-            confirmationMessages,
-        };
-    }
-
-    async invoke(
-        options: vscode.LanguageModelToolInvocationOptions<IDynamicTemplateToolParameters>,
-        _token: vscode.CancellationToken
-    ): Promise<vscode.LanguageModelToolResult> {
-        // Log the input for debugging
-        console.log('Dynamic template tool invoked with input:', JSON.stringify(options.input));
+        const mcpResponse = await callMCPServer(requiredParams);
         
-        // Show input dialogs to get user input for each parameter
-        const aitInput = await vscode.window.showInputBox({
-            prompt: 'Enter AIT parameter',
-            placeHolder: 'Enter AIT value...',
-            validateInput: (value) => {
-                if (!value || value.trim() === '') {
-                    return 'AIT parameter is required';
-                }
-                return null;
-            }
-        });
+        stream.markdown(`## Template Processing Complete ✅
 
-        if (!aitInput) {
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart('❌ AIT parameter is required. Dynamic template processing cancelled.')
-            ]);
-        }
-
-        const spkInput = await vscode.window.showInputBox({
-            prompt: 'Enter SPK parameter',
-            placeHolder: 'Enter SPK value...',
-            validateInput: (value) => {
-                if (!value || value.trim() === '') {
-                    return 'SPK parameter is required';
-                }
-                return null;
-            }
-        });
-
-        if (!spkInput) {
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart('❌ SPK parameter is required. Dynamic template processing cancelled.')
-            ]);
-        }
-
-        const repoInput = await vscode.window.showInputBox({
-            prompt: 'Enter Repository Name',
-            placeHolder: 'Enter repository name...',
-            validateInput: (value) => {
-                if (!value || value.trim() === '') {
-                    return 'Repository name is required';
-                }
-                return null;
-            }
-        });
-
-        if (!repoInput) {
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart('❌ Repository name is required. Dynamic template processing cancelled.')
-            ]);
-        }
-
-        const applicationNameInput = await vscode.window.showInputBox({
-            prompt: 'Enter Application Name',
-            placeHolder: 'Enter application name...',
-            validateInput: (value) => {
-                if (!value || value.trim() === '') {
-                    return 'Application name is required';
-                }
-                return null;
-            }
-        });
-
-        if (!applicationNameInput) {
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart('❌ Application name is required. Dynamic template processing cancelled.')
-            ]);
-        }
-
-        const projectNameInput = await vscode.window.showInputBox({
-            prompt: 'Enter Project Name',
-            placeHolder: 'Enter project name...',
-            validateInput: (value) => {
-                if (!value || value.trim() === '') {
-                    return 'Project name is required';
-                }
-                return null;
-            }
-        });
-
-        if (!projectNameInput) {
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart('❌ Project name is required. Dynamic template processing cancelled.')
-            ]);
-        }
-
-        const clusterURLInput = await vscode.window.showInputBox({
-            prompt: 'Enter Cluster URL',
-            placeHolder: 'Enter cluster URL...',
-            validateInput: (value) => {
-                if (!value || value.trim() === '') {
-                    return 'Cluster URL is required';
-                }
-                return null;
-            }
-        });
-
-        if (!clusterURLInput) {
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart('❌ Cluster URL is required. Dynamic template processing cancelled.')
-            ]);
-        }
-
-        const serviceIDInput = await vscode.window.showInputBox({
-            prompt: 'Enter Service ID',
-            placeHolder: 'Enter service ID...',
-            validateInput: (value) => {
-                if (!value || value.trim() === '') {
-                    return 'Service ID is required';
-                }
-                return null;
-            }
-        });
-
-        if (!serviceIDInput) {
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart('❌ Service ID is required. Dynamic template processing cancelled.')
-            ]);
-        }
-
-        const servicePasswordInput = await vscode.window.showInputBox({
-            prompt: 'Enter Service Password',
-            placeHolder: 'Enter service password...',
-            password: true, // Hide the password input
-            validateInput: (value) => {
-                if (!value || value.trim() === '') {
-                    return 'Service password is required';
-                }
-                return null;
-            }
-        });
-
-        if (!servicePasswordInput) {
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart('❌ Service password is required. Dynamic template processing cancelled.')
-            ]);
-        }
-
-        try {
-            // Call the MCP server with the collected parameters
-            const mcpPayload = {
-                "method": "tools/call",
-                "params": {
-                    "name": "process_template",
-                    "arguments": {
-                        "input": {
-                            "ait": aitInput,
-                            "spk": spkInput,
-                            "repo": repoInput,
-                            "application_name": applicationNameInput,
-                            "project_name": projectNameInput,
-                            "cluster_url": clusterURLInput,
-                            "service_id": serviceIDInput,
-                            "service_password": servicePasswordInput
-                        }
-                    },
-                    "_meta": {
-                        "progressToken": 1
-                    }
-                },
-                "jsonrpc": "2.0",
-                "id": 1
-            };
-
-            const mcpHeaders = {
-                'Content-Type': 'application/json, text/event-stream',
-                'Accept': 'application/json, text/event-stream',
-                'mcp-session-id': '947e4b4b8d7ea058596a9992e809eb7f346a0a8ed3ca9d04fec2fd28a76dc77d'
-            };
-
-            console.log('Calling MCP server with payload:', JSON.stringify(mcpPayload, null, 2));
-
-            const response = await axios.post(
-                'http://0.0.0.0:5001/mcp',
-                mcpPayload,
-                {
-                    headers: mcpHeaders,
-                    timeout: 10000
-                }
-            );
-
-            console.log('MCP server response:', response.data);
-
-            // Create the result with both collected parameters and MCP response
-            const result = `
-## Dynamic Template Processing Complete
-
-**Parameters Collected:**
-- **AIT**: ${aitInput}
-- **SPK**: ${spkInput}
-- **Repository**: ${repoInput}
-- **Application Name**: ${applicationNameInput}
-- **Project Name**: ${projectNameInput}
-- **Cluster URL**: ${clusterURLInput}
-- **Service ID**: ${serviceIDInput}
-- **Service Password**: ***
+**Parameters Used:**
+- **AIT**: ${requiredParams.ait}
+- **SPK**: ${requiredParams.spk}
+- **Repository Name**: ${requiredParams.reponame}
+- **Application Name**: ${requiredParams.applicationname}
+- **Project Name**: ${requiredParams.projectname}
+- **Cluster URL**: ${requiredParams.clusterurl}
+- **Service ID**: ${requiredParams.serviceid}
+- **Service Name**: ${requiredParams.servicename}
 
 **MCP Server Response:**
-${JSON.stringify(response.data, null, 2)}
+\`\`\`json
+${JSON.stringify(mcpResponse, null, 2)}
+\`\`\`
 
 **Summary:**
-The dynamic template tool has successfully collected your parameters and called the MCP server.
-            `;
+The template has been successfully processed with your parameters and the MCP server has been called.`);
 
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart(result)
-            ]);
+        return { metadata: { command: 'process', status: 'success' } };
 
-        } catch (error) {
-            console.error('Error calling MCP server:', error);
-            
-            const errorResult = `
-## Dynamic Template Processing - MCP Server Error
+    } catch (error) {
+        stream.markdown(`## Template Processing - MCP Server Error ❌
 
-**Parameters Collected:**
-- **AIT**: ${aitInput}
-- **SPK**: ${spkInput}
-- **Repository**: ${repoInput}
-- **Application Name**: ${applicationNameInput}
-- **Project Name**: ${projectNameInput}
-- **Cluster URL**: ${clusterURLInput}
-- **Service ID**: ${serviceIDInput}
-- **Service Password**: ***
+**Parameters Used:**
+- **AIT**: ${requiredParams.ait}
+- **SPK**: ${requiredParams.spk}
+- **Repository Name**: ${requiredParams.reponame}
+- **Application Name**: ${requiredParams.applicationname}
+- **Project Name**: ${requiredParams.projectname}
+- **Cluster URL**: ${requiredParams.clusterurl}
+- **Service ID**: ${requiredParams.serviceid}
+- **Service Name**: ${requiredParams.servicename}
 
 **Error Details:**
 ${error instanceof Error ? error.message : 'Unknown error occurred'}
 
-**Note:** Parameters were collected successfully, but the MCP server call failed.
-            `;
+**Note:** Parameters were provided, but the MCP server call failed.`);
 
-            return new vscode.LanguageModelToolResult([
-                new vscode.LanguageModelTextPart(errorResult)
-            ]);
-        }
+        return { metadata: { command: 'process', status: 'error' } };
     }
 }
 
-export function activate(context: vscode.ExtensionContext) {
-    // Register the template tool
-    context.subscriptions.push(
-        vscode.lm.registerTool('workspace-analyzer_template', new TemplateTool())
-    );
+// Function to call MCP server
+async function callMCPServer(params: ITemplateParameters): Promise<any> {
+    try {
+        const mcpPayload = {
+            "method": "tools/call",
+            "params": {
+                "name": "process_template",
+                "arguments": {
+                    "input": {
+                        "ait": params.ait,
+                        "spk": params.spk,
+                        "reponame": params.reponame,
+                        "applicationname": params.applicationname,
+                        "projectname": params.projectname,
+                        "clusterurl": params.clusterurl,
+                        "serviceid": params.serviceid,
+                        "servicename": params.servicename
+                    }
+                },
+                "_meta": {
+                    "progressToken": 1
+                }
+            },
+            "jsonrpc": "2.0",
+            "id": 1
+        };
 
-    // Register the dynamic template tool
-    context.subscriptions.push(
-        vscode.lm.registerTool('workspace-analyzer_dynamic-template', new DynamicTemplateTool())
-    );
+        const mcpHeaders = {
+            'Content-Type': 'application/json, text/event-stream',
+            'Accept': 'application/json, text/event-stream',
+            'mcp-session-id': '947e4b4b8d7ea058596a9992e809eb7f346a0a8ed3ca9d04fec2fd28a76dc77d'
+        };
 
-    console.log('Template Tools activated');
-    console.log('Template tool registered: workspace-analyzer_template');
-    console.log('Dynamic template tool registered: workspace-analyzer_dynamic-template');
+        console.log('Calling MCP server with payload:', JSON.stringify(mcpPayload, null, 2));
+
+        const response = await axios.post(
+            'http://0.0.0.0:5001/mcp',
+            mcpPayload,
+            {
+                headers: mcpHeaders,
+                timeout: 10000
+            }
+        );
+
+        console.log('MCP server response:', response.data);
+        return response.data;
+
+    } catch (error) {
+        console.error('Error calling MCP server:', error);
+        throw error;
+    }
+}
+
+// Template Chat Participant Handler
+const templateHandler: vscode.ChatRequestHandler = async (
+    request: vscode.ChatRequest,
+    context: vscode.ChatContext,
+    stream: vscode.ChatResponseStream,
+    _token: vscode.CancellationToken
+): Promise<vscode.ChatResult> => {
+    
+
+    
+    // Print incoming context to console for debugging
+    console.log('Full Request:', JSON.stringify(request, null, 2));
+    console.log('Full Context:', JSON.stringify(context, null, 2));
+
+    // Extract file contents and parameters from references
+    let fileContents = '';
+    let extractedParams: Partial<ITemplateParameters> = {};
+    
+    if (context.history && context.history.length > 0) {
+        for (const message of context.history) {
+            if ('prompt' in message && message.references && message.references.length > 0) {
+                for (const reference of message.references) {
+                    const refValue = reference.value as any;
+                    if (refValue && refValue.uri && refValue.uri.fsPath) {
+                        try {
+                            const filePath = refValue.uri.fsPath;
+                            console.log('Found file reference:', filePath);
+                            
+                            // Read the file contents
+                            const document = await vscode.workspace.openTextDocument(filePath);
+                            const content = document.getText();
+                            
+                            fileContents += `### File: ${filePath}\n`;
+                            fileContents += `**Content:**\n\`\`\`\n${content}\n\`\`\`\n\n`;
+                            
+                            console.log('File contents:', content);
+                            
+                            // Extract parameters from file content
+                            const fileParams = extractParametersFromText(content);
+                            extractedParams = { ...extractedParams, ...fileParams };
+                            
+                        } catch (error) {
+                            console.error('Error reading file:', error);
+                            fileContents += `### File: ${refValue.uri.fsPath}\n`;
+                            fileContents += `**Error reading file:** ${error}\n\n`;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Clean the extracted parameters
+    const cleanedParams: Partial<ITemplateParameters> = {};
+    for (const [key, value] of Object.entries(extractedParams)) {
+        if (value) {
+            (cleanedParams as any)[key] = cleanParameterValue(value);
+        }
+    }
+
+    // Display extracted parameters
+    stream.markdown('## Template Parameter Extraction\n\n');
+
+    // Add file contents if found
+    if (fileContents) {
+        stream.markdown('## File Contents Found\n\n');
+        stream.markdown(fileContents);
+    }
+
+    // Display extracted parameters
+    stream.markdown('## Extracted Parameters\n\n');
+    
+    const allParams = ['ait', 'spk', 'reponame', 'applicationname', 'projectname', 'clusterurl', 'serviceid', 'servicename'];
+    
+    if (Object.keys(cleanedParams).length > 0) {
+        stream.markdown('**Parameters found in file contents:**\n\n');
+        for (const param of allParams) {
+            const value = (cleanedParams as any)[param];
+            if (value) {
+                stream.markdown(`- **${param.toUpperCase()}**: ${value}\n`);
+            } else {
+                stream.markdown(`- **${param.toUpperCase()}**: Not found\n`);
+            }
+        }
+        
+        stream.markdown('\n**Do you want to use these default values or edit them?**\n\n');
+        
+        // Show notification with buttons
+        const choice = await vscode.window.showInformationMessage(
+            'Parameters found in file contents. Do you want to use these default values or edit them?',
+            'Use Defaults',
+            'Edit Parameters'
+        );
+        
+        if (choice === 'Use Defaults') {
+            stream.markdown('**Using default values...**\n');
+            return await callMCPServerWithParams(stream, cleanedParams);
+        } else if (choice === 'Edit Parameters') {
+            stream.markdown('**Opening input dialogs for editing...**\n');
+            return await collectParametersFromUser(stream, cleanedParams);
+        } else {
+            // User cancelled
+            stream.markdown('**Process cancelled by user.**\n');
+            return { metadata: { command: 'process', status: 'cancelled' } };
+        }
+        
+    } else {
+        stream.markdown('**No parameters found in file contents.**\n\n');
+        stream.markdown('Proceeding to input dialogs for all parameters...\n');
+        
+        // Proceed directly to input dialogs
+        return await collectParametersFromUser(stream, {});
+    }
+};
+
+// Function to collect parameters from user input dialogs
+async function collectParametersFromUser(
+    stream: vscode.ChatResponseStream, 
+    defaultParams: Partial<ITemplateParameters>
+): Promise<vscode.ChatResult> {
+    
+    const params: ITemplateParameters = {
+        ait: '',
+        spk: '',
+        reponame: '',
+        applicationname: '',
+        projectname: '',
+        clusterurl: '',
+        serviceid: '',
+        servicename: ''
+    };
+
+    // Collect parameters through input dialogs
+    const aitInput = await vscode.window.showInputBox({
+        prompt: 'Enter AIT parameter',
+        placeHolder: 'Enter AIT value...',
+        value: defaultParams.ait || '',
+        validateInput: (value) => {
+            if (!value || value.trim() === '') {
+                return 'AIT parameter is required';
+            }
+            return null;
+        }
+    });
+
+    if (!aitInput) {
+        stream.markdown('❌ **AIT parameter is required. Process cancelled.**');
+        return { metadata: { command: 'process', status: 'cancelled' } };
+    }
+    params.ait = aitInput;
+
+    const spkInput = await vscode.window.showInputBox({
+        prompt: 'Enter SPK parameter',
+        placeHolder: 'Enter SPK value...',
+        value: defaultParams.spk || '',
+        validateInput: (value) => {
+            if (!value || value.trim() === '') {
+                return 'SPK parameter is required';
+            }
+            return null;
+        }
+    });
+
+    if (!spkInput) {
+        stream.markdown('❌ **SPK parameter is required. Process cancelled.**');
+        return { metadata: { command: 'process', status: 'cancelled' } };
+    }
+    params.spk = spkInput;
+
+    const reponameInput = await vscode.window.showInputBox({
+        prompt: 'Enter Repository Name',
+        placeHolder: 'Enter repository name...',
+        value: defaultParams.reponame || '',
+        validateInput: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Repository name is required';
+            }
+            return null;
+        }
+    });
+
+    if (!reponameInput) {
+        stream.markdown('❌ **Repository name is required. Process cancelled.**');
+        return { metadata: { command: 'process', status: 'cancelled' } };
+    }
+    params.reponame = reponameInput;
+
+    const applicationnameInput = await vscode.window.showInputBox({
+        prompt: 'Enter Application Name',
+        placeHolder: 'Enter application name...',
+        value: defaultParams.applicationname || '',
+        validateInput: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Application name is required';
+            }
+            return null;
+        }
+    });
+
+    if (!applicationnameInput) {
+        stream.markdown('❌ **Application name is required. Process cancelled.**');
+        return { metadata: { command: 'process', status: 'cancelled' } };
+    }
+    params.applicationname = applicationnameInput;
+
+    const projectnameInput = await vscode.window.showInputBox({
+        prompt: 'Enter Project Name',
+        placeHolder: 'Enter project name...',
+        value: defaultParams.projectname || '',
+        validateInput: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Project name is required';
+            }
+            return null;
+        }
+    });
+
+    if (!projectnameInput) {
+        stream.markdown('❌ **Project name is required. Process cancelled.**');
+        return { metadata: { command: 'process', status: 'cancelled' } };
+    }
+    params.projectname = projectnameInput;
+
+    const clusterurlInput = await vscode.window.showInputBox({
+        prompt: 'Enter Cluster URL',
+        placeHolder: 'Enter cluster URL...',
+        value: defaultParams.clusterurl || '',
+        validateInput: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Cluster URL is required';
+            }
+            return null;
+        }
+    });
+
+    if (!clusterurlInput) {
+        stream.markdown('❌ **Cluster URL is required. Process cancelled.**');
+        return { metadata: { command: 'process', status: 'cancelled' } };
+    }
+    params.clusterurl = clusterurlInput;
+
+    const serviceidInput = await vscode.window.showInputBox({
+        prompt: 'Enter Service ID',
+        placeHolder: 'Enter service ID...',
+        value: defaultParams.serviceid || '',
+        validateInput: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Service ID is required';
+            }
+            return null;
+        }
+    });
+
+    if (!serviceidInput) {
+        stream.markdown('❌ **Service ID is required. Process cancelled.**');
+        return { metadata: { command: 'process', status: 'cancelled' } };
+    }
+    params.serviceid = serviceidInput;
+
+    const servicenameInput = await vscode.window.showInputBox({
+        prompt: 'Enter Service Name',
+        placeHolder: 'Enter service name...',
+        value: defaultParams.servicename || '',
+        validateInput: (value) => {
+            if (!value || value.trim() === '') {
+                return 'Service name is required';
+            }
+            return null;
+        }
+    });
+
+    if (!servicenameInput) {
+        stream.markdown('❌ **Service name is required. Process cancelled.**');
+        return { metadata: { command: 'process', status: 'cancelled' } };
+    }
+    params.servicename = servicenameInput;
+
+    // Call MCP server with collected parameters
+    try {
+        stream.markdown('## Processing Template...\n\nCalling MCP server with collected parameters...');
+        
+        const mcpResponse = await callMCPServer(params);
+        
+        stream.markdown(`## Template Processing Complete ✅
+
+**Parameters Used:**
+- **AIT**: ${params.ait}
+- **SPK**: ${params.spk}
+- **Repository Name**: ${params.reponame}
+- **Application Name**: ${params.applicationname}
+- **Project Name**: ${params.projectname}
+- **Cluster URL**: ${params.clusterurl}
+- **Service ID**: ${params.serviceid}
+- **Service Name**: ${params.servicename}
+
+**MCP Server Response:**
+\`\`\`json
+${JSON.stringify(mcpResponse, null, 2)}
+\`\`\`
+
+**Summary:**
+The template has been successfully processed with your parameters and the MCP server has been called.`);
+
+        return { metadata: { command: 'process', status: 'success' } };
+
+    } catch (error) {
+        stream.markdown(`## Template Processing - MCP Server Error ❌
+
+**Parameters Collected:**
+- **AIT**: ${params.ait}
+- **SPK**: ${params.spk}
+- **Repository Name**: ${params.reponame}
+- **Application Name**: ${params.applicationname}
+- **Project Name**: ${params.projectname}
+- **Cluster URL**: ${params.clusterurl}
+- **Service ID**: ${params.serviceid}
+- **Service Name**: ${params.servicename}
+
+**Error Details:**
+${error instanceof Error ? error.message : 'Unknown error occurred'}
+
+**Note:** Parameters were collected successfully, but the MCP server call failed.`);
+
+        return { metadata: { command: 'process', status: 'error' } };
+    }
+}
+
+export function activate(_context: vscode.ExtensionContext) {
+    // Register the Template Chat Participant
+    vscode.chat.createChatParticipant('workspace-analyzer.template', templateHandler);
+    
+    console.log('Template Chat Participant activated');
+    console.log('Template participant registered: @template');
 }
 
 export function deactivate() {
-    console.log('Workspace Analyzer Language Model Tools deactivated');
+    console.log('Template Chat Participant deactivated');
 } 
